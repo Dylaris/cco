@@ -43,10 +43,29 @@ macro syscall3 syscall_nr, arg1, arg2, arg3 {
     pop rax
 }
 
+macro pushall {
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+}
+
+macro popall {
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+}
+
 segment readable executable
 ; text section
 
-; rax: store the print integer
+; function: print integer
+; param: rax stores the print integer
 print_int:
     push rbp
     mov rbp, rsp
@@ -98,6 +117,7 @@ print_int:
 
     ret
 
+; function: print a series of contigunous numbers
 counter:
     push rbp
     mov rbp, rsp
@@ -106,12 +126,13 @@ counter:
     push rax
     push rcx
 
-    mov rcx, 20
-    mov QWORD [rbp-8], 20
+    mov rcx, 10
+    mov QWORD [rbp-8], 100
 .loop:
     mov rax, QWORD [rbp-8]
     call print_int
     inc QWORD [rbp-8]
+    call coroutine_yield
     loop .loop
 
 .exit:
@@ -123,20 +144,122 @@ counter:
 
     ret
 
+coroutine_yield:
+    ; r15 point to the start address of context
+    push rax
+    push rbx
+    mov rax, [cur_coroutine_id]
+    mov rbx, 24
+    mul rbx
+    add rax, coroutines_context
+    mov r15, rax
+    pop rbx
+    pop rax
+
+    ; store the environment
+    mov r14, [rsp]
+    mov [r15+2*8], r14        ; sotre rip
+    add rsp, 8                ; skip the pushed rip
+    pushall
+    mov [r15+1*8], rsp        ; restore rsp
+    mov [r15+0*8], rbp        ; restore rbp
+
+    ; jump back to main coroutine
+    mov r15, coroutines_context
+    jmp QWORD [r15+2*8]
+
+; function: resume the execution of coroutine
+coroutine_resume:
+    ; store the main coroutine's environment
+    mov r15, coroutines_context
+    mov QWORD [r15+0*8], rbp    ; store rbp
+    add rsp, 8                  ; skip the pushed rip
+    mov QWORD [r15+1*8], rsp    ; store rsp
+    mov r14, [rsp-8]
+    mov QWORD [r15+2*8], r14    ; sotre rip
+
+    ; go to next coroutine
+    inc QWORD [cur_coroutine_id]
+    mov r15, [coroutines_count]
+    cmp [cur_coroutine_id], r15
+    jl .return
+    mov QWORD [cur_coroutine_id], 1
+    
+.return:
+    ; r15 point to the start address of context
+    mov rax, [cur_coroutine_id]
+    mov rbx, 24
+    mul rbx
+    add rax, coroutines_context
+    mov r15, rax
+
+    mov rbp, [r15+0*8]
+    mov rsp, [r15+1*8]
+    popall
+    jmp QWORD [r15+2*8]
+
+; function: set the environment for the coroutine 
+; param: r14 stores the address of beginning instruction
+coroutine_init:
+    ; r15 point to the start address of context
+    push rax
+    push rbx
+    mov rax, [coroutines_count]
+    mov rbx, 24
+    mul rbx
+    add rax, coroutines_context
+    mov r15, rax
+    pop rbx
+    pop rax
+
+    mov QWORD [r15+2*8], r14        ; sotre rip
+
+    mov r14, [stack_end]
+    ; for uniform (the first popall in resume)
+    mov r13, rsp    ; store old rsp
+    mov rsp, r14    ; push all registers to coroutine stack
+    pushall
+    mov QWORD [r15+1*8], rsp        ; store rsp
+    mov rsp, r13    ; restore old rsp
+
+    mov QWORD [r15+0*8], 0          ; store rbp
+
+    mov r15, [stack_end]
+    sub r15, COROUTINE_STACK_SIZE
+    mov [stack_end], r15
+
+    inc QWORD [coroutines_count]
+
+    ret
+
 entry _start
 _start:
-    call counter
+    ; main coroutine
+    lea r14, [rip]
+    call coroutine_init
 
-    ; syscall3 SYS_write, STDOUT_FILENO, hello_msg, hello_msg_len
-    syscall1 SYS_exit, 10
+    mov rcx, 3 
+.init_loop:
+    lea r14, [counter]
+    call coroutine_init
+    loop .init_loop
+
+.resume_loop:
+    call coroutine_resume
+    jmp .resume_loop
+
+    syscall1 SYS_exit, 0
 
 segment readable writeable
 ; data section
-
 hello_msg: db "HELLO WORLD", 10, 0
-hello_msg_len =  $-hello_msg
+hello_msg_len = $-hello_msg
 buffer_overflow_msg: db "buffer is overflow", 10, 0
 buffer_overflow_msg_len = $-buffer_overflow_msg
+stack_end:        dq coroutines_stack+COROUTINE_CAPACITY*COROUTINE_STACK_SIZE
+coroutines_count: dq 0
+cur_coroutine_id: dq 0
 
 ; bss section
-coroutines_stack: rb COROUTINE_CAPACITY*COROUTINE_STACK_SIZE
+coroutines_stack:   rb COROUTINE_CAPACITY*COROUTINE_STACK_SIZE
+coroutines_context: rq 3*COROUTINE_CAPACITY     ; rbp, rsp, rip
