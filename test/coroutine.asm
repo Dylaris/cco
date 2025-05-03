@@ -127,7 +127,7 @@ counter:
     push rcx
 
     mov rcx, 10
-    mov QWORD [rbp-8], 100
+    mov QWORD [rbp-8], 0 
 .loop:
     mov rax, QWORD [rbp-8]
     call print_int
