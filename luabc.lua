@@ -111,6 +111,7 @@ end
 -- @brief Remove the label from cmd.link
 -- @param label The removed one
 function luabc.cmd:unlink(label)
+    if not label then label = "__default" end
     for idx, link_label in ipairs(self._link) do
         if link_label == label then
             table.remove(self._link, idx)
@@ -122,6 +123,7 @@ end
 -- @brief Add the label to cmd.link
 -- @param label The add one
 function luabc.cmd:link(label)
+    if not label then label = "__default" end
     table.insert(self._link, label)
 end
 

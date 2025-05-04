@@ -31,6 +31,11 @@ local function build()
     local clean = cmd:new("clean")
     clean:call(tool.clean, CLEAR)
 
+    -- debuging
+    local debugging = cmd:new("debug", nil, true)
+    debugging:call(function () table.insert(CFLAGS, "-g") end)
+    debugging:link()
+
     luabc.build()
 end
 build()
