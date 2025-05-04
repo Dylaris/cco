@@ -39,12 +39,11 @@ public coroutine_switch_context
 ;; rdi = cur_ctx, rsi = next_ctx
 coroutine_switch_context:
     ;; store context
-    lea rax, [rsp]
-    mov [rdi+CTX_RSP], rax
+    mov [rdi+CTX_RSP], rsp
     mov [rdi+CTX_RBX], rbx
     mov [rdi+CTX_RCX], rcx
     mov [rdi+CTX_RDX], rdx
-    mov rax, [rax]  ;; point to the top of stack, where stores return address
+    mov rax, [rsp]  ;; point to the top of stack, where stores return address
     mov [rdi+CTX_RET], rax
     mov [rdi+CTX_RSI], rsi
     mov [rdi+CTX_RDI], rdi
@@ -58,18 +57,18 @@ coroutine_switch_context:
     xor rax, rax    ;; always return 0
 
     ;; restore context
-    mov rbp, [rsi+CTX_RBP]
-    mov rsp, [rsi+CTX_RSP]
     mov r15, [rsi+CTX_R15]
     mov r14, [rsi+CTX_R14]
     mov r13, [rsi+CTX_R13]
     mov r12, [rsi+CTX_R12]
     mov r9 , [rsi+CTX_R9 ]
     mov r8 , [rsi+CTX_R8 ]
+    mov rbp, [rsi+CTX_RBP]
     mov rdi, [rsi+CTX_RDI]
     mov rdx, [rsi+CTX_RDX]
     mov rcx, [rsi+CTX_RCX]
     mov rbx, [rsi+CTX_RBX]
+    mov rsp, [rsi+CTX_RSP]
     add rsp, 8
     push QWORD [rsi+CTX_RET]    ;; use ret to flush rip instead of mov
     mov rsi, [rsi+CTX_RSI]
