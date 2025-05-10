@@ -1,11 +1,9 @@
 #ifndef COROUTINE_H
 #define COROUTINE_H
 
-#define ZD_DS_DYNAMIC_ARRAY
-#define ZD_DS_STACK
-#include "zd.h"
+#include <stddef.h>
 
-#define COROUTINE_STACK_SIZE 4096
+#define COROUTINE_STACK_SIZE (16*1024)
 #define PROTECTION_REGION    64
 
 // 64bit (context.regs[14])
@@ -57,9 +55,8 @@ void coroutine_yield(void);
 void coroutine_finish(void);
 void coroutine_collect(struct coroutine *co);
 void coroutine_auto_collect(void);
-
-extern struct zd_dyna coroutines;
-extern struct zd_stack back_stk;
-extern struct coroutine *current_co;
+size_t coroutine_alive(void);
+size_t coroutine_workid(void);
+size_t coroutine_count(void);
 
 #endif /* COROUTINE_H */

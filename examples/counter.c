@@ -1,10 +1,12 @@
+#include <stdio.h>
+
 #include "coroutine.h"
 
 static void counter(void *arg)
 {
     size_t n = (size_t) arg;
     for (size_t i = 0; i < n; i++) {
-        printf("[%zu] %zu\n", current_co->id, i);
+        printf("[%zu] %zu\n", coroutine_workid(), i);
         coroutine_yield();
     }
 
@@ -22,7 +24,7 @@ int main(void)
     coroutine_auto_resume();
     coroutine_auto_collect();
 
-    printf("count: %zu\n", coroutines.count);
+    printf("alive: %zu count: %zu\n", coroutine_alive(), coroutine_count());
 
     coroutine_destroy();
 

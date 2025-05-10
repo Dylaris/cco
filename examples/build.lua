@@ -8,7 +8,7 @@ local debug = luabc.debug
 
 local CC        = "gcc"
 local ASM       = "fasm"
-local CFLAGS    = { "-Wall", "-Wextra", "-I ../src/", "-I ../" }
+local CFLAGS    = { "-Wno-unused-function", "-Wall", "-Wextra", "-I ../src/", "-I ../" }
 local CSTD      = "-std=c11"
 local EXAMPLE   = tool.match_file_extension(".c")
 local TARGET    = tool.replace_files_extension(EXAMPLE, (luabc.os == "WIN") and ".exe" or "")

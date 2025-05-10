@@ -1,11 +1,14 @@
 #include "coroutine.h"
 
+#define ZD_STATIC
 #define ZD_IMPLEMENTATION
+#define ZD_DS_DYNAMIC_ARRAY
+#define ZD_DS_STACK
 #include "zd.h"
 
-struct zd_dyna coroutines = {0};
-struct zd_stack back_stk = {0};   /* record the back address to resume() invoke */
-struct coroutine *current_co = NULL;
+static struct zd_dyna coroutines = {0};
+static struct zd_stack back_stk = {0};   /* record the back address to resume() invoke */
+static struct coroutine *current_co = NULL;
 
 static void clear_coroutine(void *arg)
 {
@@ -123,4 +126,25 @@ void coroutine_auto_collect(void)
         coroutine_collect(co);
         i = 0;  /* re scan because of zd_dyna_remove() change the count of coroutines array */
     }
+}
+
+size_t coroutine_alive(void)
+{
+    struct coroutine *co_iter = NULL;
+    size_t alive = 0;
+
+    while ((co_iter = zd_dyna_next(&coroutines)) != NULL)
+        if (co_iter->state != ST_DEAD) alive += 1;
+
+    return alive;
+}
+
+size_t coroutine_workid(void)
+{
+    return current_co->id;
+}
+
+size_t coroutine_count(void)
+{
+    return coroutines.count;
 }
