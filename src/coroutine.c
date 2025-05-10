@@ -1,101 +1,126 @@
 #include "coroutine.h"
 
-#ifndef dynamic_array
-#define dynamic_array_append(da, elem)                                  \
-    do {                                                                \
-        if ((da).capacity <= (da).count) {                              \
-            (da).capacity += 10;                                        \
-            (da).items = realloc((da).items,                            \
-                    sizeof(elem)*(da).capacity);                        \
-            assert((da).items != NULL);                                 \
-        }                                                               \
-        (da).items[(da).count++] = (elem);                              \
-    } while (0)
-#define dynamic_array_remove(da, idx, clear_func)                       \
-    do {                                                                \
-        if ((da).count > 0) {                                           \
-            if (clear_func != NULL) clear_func((da).items+idx);         \
-            memcpy((da).items+(idx), (da).items+(idx)+1,                \
-                    sizeof(*(da).items)*((da).capacity-(idx)-1));       \
-            (da).count--;                                               \
-        }                                                               \
-    } while (0)
-#endif // dynamic_array
+#define ZD_IMPLEMENTATION
+#include "../zd.h"
 
-struct Coroutine _coroutines[10];
+struct zd_dyna coroutines = {0};
+struct zd_stack back_stk = {0};   /* record the back address to resume() invoke */
+struct coroutine *current_co = NULL;
 
-struct Coroutines coroutines = {
-    // .items     = NULL,
-    .items     = _coroutines,
-    .count     = 0,
-    .capacity  = 0,
-    .cur_co_id = 0
-};
-
-struct Coroutine *coroutine_create(coroutine_task func)
+static void clear_coroutine(void *arg)
 {
-    struct Coroutine coroutine;
-    memset(&coroutine, 0, sizeof(struct Coroutine));
-    coroutine.stack = malloc(sizeof(char) * COROUTINE_STACK_SIZE);
-    assert(coroutine.stack != NULL);
-    coroutine.regs[CTX_RSP] = (void *) (((unsigned long) coroutine.stack + COROUTINE_STACK_SIZE) & -16LL);
-    coroutine.regs[CTX_RET] = func;
-    coroutine.status = ALIVE;
-
-    // dynamic_array_append(coroutines, coroutine);
-    coroutines.items[coroutines.count++] = coroutine;
-
-    return (coroutines.items + coroutines.count - 1);
+    struct coroutine *co = (struct coroutine *) arg;
+    if (co->stack_base != NULL) free(co->stack_base);
 }
 
-// if next_co is NULL, go back to next coroutine
-void coroutine_resume(struct Coroutine *next_co)
-{
-    if (next_co == NULL) return;
-    struct Coroutine *cur_co = coroutines.items + coroutines.cur_co_id;
-    coroutines.cur_co_id = next_co - coroutines.items;
-    coroutine_switch_context(&(cur_co->regs), &(next_co->regs));
-}
-
-// if next_co is NULL, go back to main coroutine
-void coroutine_yield(struct Coroutine *next_co)
-{
-    struct Coroutine *cur_co = coroutines.items + coroutines.cur_co_id;
-    if (next_co == NULL) {
-        coroutines.cur_co_id = 0;
-        next_co = coroutines.items;
-    } else {
-        coroutines.cur_co_id = next_co - coroutines.items;
-    }
-    coroutine_switch_context(&(cur_co->regs), &(next_co->regs));
-}
-
-void coroutines_destroy(void)
-{
-    // skip the main coroutine
-    for (size_t i = 1; i < coroutines.count - 1; i++)
-        free(coroutines.items[i].stack);
-    // free(coroutines.items);
-}
-
-// initialize the main coroutine (allocate a placeholder in the coroutines array)
 void coroutine_init(void)
 {
-    printf("CCO START\n"); // you must have this one to avoid a fucking unknown bug :-)
-    
-    struct Coroutine coroutine;
-    memset(&coroutine, 0, sizeof(struct Coroutine));
-    // dynamic_array_append(coroutines, coroutine);
-    coroutines.items[coroutines.count++] = coroutine;
-    coroutines.cur_co_id = 0;
+    zd_dyna_init(&coroutines, sizeof(struct coroutine));
+    zd_stack_init(&back_stk, sizeof(struct coroutine *));
 
-    struct Coroutine *main_co = coroutines.items;
-    coroutine_switch_context(&(main_co->regs), &(main_co->regs));
+    struct coroutine co = {0};
+    co.state = ST_RUNNING;
+    co.id = coroutines.count;
+
+    zd_dyna_append(&coroutines, &co);
+
+    current_co = (struct coroutine *) zd_dyna_get(&coroutines, coroutines.count - 1);
+}
+
+void coroutine_destroy(void)
+{
+    current_co = NULL;
+    zd_stack_destroy(&back_stk, NULL);
+    zd_dyna_destroy(&coroutines, clear_coroutine);
+}
+
+struct coroutine *coroutine_create(void (*task)(void *), void *arg)
+{
+    struct coroutine co = {0};
+    co.stack_size = COROUTINE_STACK_SIZE;
+    co.stack_base = malloc(COROUTINE_STACK_SIZE);
+    assert(co.stack_base != NULL);
+    co.regs[CTX_RET] = task;
+    co.regs[CTX_RSP] = (char *) co.stack_base + co.stack_size - PROTECTION_REGION;     /* reserve some bytes for protection */
+    co.regs[CTX_RDI] = arg;
+    co.state = ST_READY;
+    co.id = coroutines.count;
+
+    zd_dyna_append(&coroutines, &co);
+
+    return zd_dyna_get(&coroutines, coroutines.count - 1);
+}
+
+void coroutine_resume(struct coroutine *next)
+{
+    if (next->state != ST_SUSPEND && next->state != ST_READY) return;
+
+    zd_stack_push(&back_stk, &current_co);
+    current_co->state = ST_SUSPEND;
+
+    struct coroutine *cur = current_co;
+    current_co = next;
+    current_co->state = ST_RUNNING;
+
+    coroutine_switch_context(cur, next);
+}
+
+void coroutine_auto_resume(void)
+{
+    size_t dead = 0;
+    while (1) {
+        struct coroutine *co_iter = zd_dyna_next(&coroutines);
+        if (co_iter == NULL || co_iter->state == ST_DEAD) continue;
+
+        coroutine_resume(co_iter);
+
+        if (co_iter->state == ST_DEAD) dead += 1;
+        if (dead == coroutines.count - 1) break;
+    }
+}
+
+void coroutine_yield(void)
+{
+    if (current_co->state != ST_RUNNING) return;
+
+    current_co->state = ST_SUSPEND;
+    struct coroutine *cur = current_co;
+
+    struct coroutine *next = *(struct coroutine **) zd_stack_pop(&back_stk, NULL);
+    assert(next != NULL);
+    current_co = next;
+    current_co->state = ST_RUNNING;
+
+    coroutine_switch_context(cur, next);
 }
 
 void coroutine_finish(void)
 {
-    coroutines.items[coroutines.cur_co_id].status = DEAD;
-    coroutine_yield(NULL);
+    current_co->state = ST_DEAD;
+    struct coroutine *cur = current_co;
+
+    struct coroutine *next = *(struct coroutine **) zd_stack_pop(&back_stk, NULL);
+    assert(next != NULL);
+    current_co = next;
+    current_co->state = ST_RUNNING;
+
+    coroutine_switch_context(cur, next);
 }
 
+void coroutine_collect(struct coroutine *co)
+{
+    if (co->state != ST_DEAD) return;
+    size_t off = co - (struct coroutine *) coroutines.base;
+    if (off >= coroutines.count) return;
+    zd_dyna_remove(&coroutines, off, clear_coroutine);
+}
+
+void coroutine_auto_collect(void)
+{
+    for (size_t i = 0; i < coroutines.count; i++) {
+        struct coroutine *co = zd_dyna_get(&coroutines, i);
+        if (co->state != ST_DEAD) continue;
+        coroutine_collect(co);
+        i = 0;  /* re scan because of zd_dyna_remove() change the count of coroutines array */
+    }
+}

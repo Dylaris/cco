@@ -1,12 +1,12 @@
 #ifndef COROUTINE_H
 #define COROUTINE_H
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
+#define ZD_DS_DYNAMIC_ARRAY
+#define ZD_DS_STACK
+#include "../zd.h"
 
-#define COROUTINE_STACK_SIZE (1 << 10)
+#define COROUTINE_STACK_SIZE 4096
+#define PROTECTION_REGION    64
 
 // 64bit (context.regs[14])
 // low
@@ -14,8 +14,8 @@
 //      | regs[1]:  r14 |
 //      | regs[2]:  r13 |
 //      | regs[3]:  r12 |
-//      | regs[4]:  r8  |
-//      | regs[5]:  r9  |
+//      | regs[4]:  r9  |
+//      | regs[5]:  r8  |
 //      | regs[6]:  rbp |
 //      | regs[7]:  rdi |
 //      | regs[8]:  rsi |
@@ -26,39 +26,40 @@
 //      | regs[13]: rsp |
 // high
 
-enum {
-    CTX_RDI = 7,
-    CTX_RSI = 8,
-    CTX_RET = 9,
-    CTX_RSP = 13
+enum ctx_reg_idx {
+    CTX_R15, CTX_R14, CTX_R13, CTX_R12, CTX_R9,  CTX_R8,  CTX_RBP,
+    CTX_RDI, CTX_RSI, CTX_RET, CTX_RDX, CTX_RCX, CTX_RBX, CTX_RSP
 };
 
-#define ALIVE 0
-#define DEAD  1
+#define ST_READY   0
+#define ST_RUNNING 1
+#define ST_SUSPEND 2
+#define ST_DEAD    3
 
-struct Coroutine {
-    void *regs[14];     // execution environment 
-    void *stack;        // start address of private stack
-    int status;
+struct coroutine {
+    /* context */
+    void *regs[14];
+    size_t stack_size;
+    void *stack_base;
+
+    /* ohters */
+    size_t state;
+    size_t id;
 };
 
-struct Coroutines {
-    struct Coroutine *items;
-    size_t count;
-    size_t capacity;
-    size_t cur_co_id;
-};
-
-extern struct Coroutines coroutines;
-
-typedef void *(*coroutine_task)(void *);
-
+extern void coroutine_switch_context(struct coroutine *cur, struct coroutine *next);
 void coroutine_init(void);
-struct Coroutine *coroutine_create(coroutine_task func);
-void coroutine_resume(struct Coroutine *next_co);
-void coroutine_yield(struct Coroutine *next_co);
-void coroutine_switch_context(void *cur_ctx, void *next_ctx);
+void coroutine_destroy(void);
+struct coroutine *coroutine_create(void (*task)(void *), void *arg);
+void coroutine_resume(struct coroutine *next);
+void coroutine_auto_resume(void);
+void coroutine_yield(void);
 void coroutine_finish(void);
-void coroutines_destroy(void);
+void coroutine_collect(struct coroutine *co);
+void coroutine_auto_collect(void);
 
-#endif // COROUTINE_H
+extern struct zd_dyna coroutines;
+extern struct zd_stack back_stk;
+extern struct coroutine *current_co;
+
+#endif /* COROUTINE_H */
