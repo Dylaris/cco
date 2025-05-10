@@ -187,6 +187,8 @@ ZD_DEF void zd_dynasm_free(void *addr);
 }
 #endif /* __cplusplus */
 
+#endif /* _ZD_H_ */
+
 #ifdef ZD_IMPLEMENTATION
 
 #ifdef ZD_COMMAND_LINE
@@ -719,6 +721,3 @@ ZD_DEF void zd_dynasm_free(void *addr)
 #endif /* ZD_DYNASM */
 
 #endif /* ZD_IMPLEMENTATION */
-
-#endif /* _ZD_H_ */
-

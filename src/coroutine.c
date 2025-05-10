@@ -1,7 +1,7 @@
 #include "coroutine.h"
 
 #define ZD_IMPLEMENTATION
-#include "../zd.h"
+#include "zd.h"
 
 struct zd_dyna coroutines = {0};
 struct zd_stack back_stk = {0};   /* record the back address to resume() invoke */

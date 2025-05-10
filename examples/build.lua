@@ -31,7 +31,7 @@ local function build()
     -- link
     for i, _ in ipairs(TARGET) do
         local link = cmd:new()
-        link:append(CC, CFLAGS, CSTD, "-o", TARGET[i], OBJ)
+        link:append(CC, CFLAGS, CSTD, "-o", TARGET[i], EXAMPLE[i], OBJ)
     end
 
     local clean = cmd:new("clean")

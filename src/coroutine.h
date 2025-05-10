@@ -3,7 +3,7 @@
 
 #define ZD_DS_DYNAMIC_ARRAY
 #define ZD_DS_STACK
-#include "../zd.h"
+#include "zd.h"
 
 #define COROUTINE_STACK_SIZE 4096
 #define PROTECTION_REGION    64
