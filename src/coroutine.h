@@ -45,7 +45,7 @@ struct coroutine {
     size_t id;
 };
 
-extern void coroutine_switch_context(struct coroutine *cur, struct coroutine *next);
+void __attribute__((naked)) coroutine_switch_context(struct coroutine *cur, struct coroutine *next);
 void coroutine_init(void);
 void coroutine_destroy(void);
 struct coroutine *coroutine_create(void (*task)(void *), void *arg);

@@ -33,7 +33,7 @@ CTX_RCX = 8*11
 CTX_RBX = 8*12
 CTX_RSP = 8*13
 
-;; void coroutine_switch_context(struct coctx *cur, struct coctx *next);
+;; void coroutine_switch_context(struct coroutine *cur, struct coroutine *next);
 public coroutine_switch_context
 
 ;; rdi = cur, rsi = next

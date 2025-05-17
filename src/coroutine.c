@@ -148,3 +148,49 @@ size_t coroutine_count(void)
 {
     return coroutines.count;
 }
+
+
+void __attribute__((naked)) coroutine_switch_context(struct coroutine *cur, struct coroutine *next)
+{
+    (void) cur;
+    (void) next;
+    
+    __asm__ __volatile__(
+        /* store current coroutine's context */
+        "leaq (%rsp), %rax\n\t"
+        "movq %rax, 104(%rdi)\n\t"
+        "movq %rbx, 96(%rdi)\n\t"
+        "movq %rcx, 88(%rdi)\n\t"
+        "movq %rdx, 80(%rdi)\n\t"
+        "movq 0(%rax), %rax\n\t"
+        "movq %rax, 72(%rdi)\n\t"
+        "movq %rsi, 64(%rdi)\n\t"
+        "movq %rdi, 56(%rdi)\n\t"
+        "movq %rbp, 48(%rdi)\n\t"
+        "movq %r8, 40(%rdi)\n\t"
+        "movq %r9, 32(%rdi)\n\t"
+        "movq %r12, 24(%rdi)\n\t"
+        "movq %r13, 16(%rdi)\n\t"
+        "movq %r14, 8(%rdi)\n\t"
+        "movq %r15, (%rdi)\n\t"
+        "xorq %rax, %rax\n\t"
+
+        /* restore next coroutine's context */
+        "movq 48(%rsi), %rbp\n\t"
+        "movq 104(%rsi), %rsp\n\t"
+        "movq (%rsi), %r15\n\t"
+        "movq 8(%rsi), %r14\n\t"
+        "movq 16(%rsi), %r13\n\t"
+        "movq 24(%rsi), %r12\n\t"
+        "movq 32(%rsi), %r9\n\t"
+        "movq 40(%rsi), %r8\n\t"
+        "movq 56(%rsi), %rdi\n\t"
+        "movq 80(%rsi), %rdx\n\t"
+        "movq 88(%rsi), %rcx\n\t"
+        "movq 96(%rsi), %rbx\n\t"
+        "leaq 8(%rsp), %rsp\n\t"
+        "pushq 72(%rsi)\n\t"
+        "movq 64(%rsi), %rsi\n\t"
+        "ret\n\t"
+    );
+}

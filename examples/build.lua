@@ -14,15 +14,18 @@ local EXAMPLE   = tool.match_file_extension(".c")
 local TARGET    = tool.replace_files_extension(EXAMPLE, (luabc.os == "WIN") and ".exe" or "")
 local C_SRC     = tool.match_file_extension(".c", "../src/")
 local ASM_SRC   = tool.match_file_extension(".asm", "../src/")
-local OBJ       = tool.replace_files_extension({C_SRC, ASM_SRC}, ".o")
+-- local OBJ       = tool.replace_files_extension({C_SRC, ASM_SRC}, ".o")
+local OBJ       = tool.replace_files_extension(C_SRC, ".o")
 local CLEAR     = { TARGET, table.unpack(OBJ) }
 
 local function build()
     -- compile
+    --[[
     for i, _ in ipairs(ASM_SRC) do
         local compile = cmd:new()
         compile:append(ASM, ASM_SRC[i], OBJ[#C_SRC+i])
     end
+    --]]
     for i, _ in ipairs(C_SRC) do
         local compile = cmd:new()
         compile:append(CC, CFLAGS, CSTD, "-c", "-o", OBJ[i], C_SRC[i])
